@@ -527,10 +527,14 @@
         margin-bottom: 16px;
       }
       .slip h2 { font-family: "Noto Serif SC", serif; font-size: 22px; }
-      .slip table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      .slip td { padding: 6px 0; border-bottom: 1px solid #ddd; }
-      .slip .big { font-size: 28px; font-weight: 700; padding-top: 12px; }
+      .slip { width: 100%; max-width: none; box-sizing: border-box; }
+      .slip table { width: 100% !important; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+      .slip td { padding: 8px 0; border-bottom: 1px solid #ddd; word-break: break-all; }
+      .slip td:last-child { text-align: right; width: 42%; }
+      .slip .big { font-size: 22px; font-weight: 700; padding-top: 12px; }
       .sign { display: flex; justify-content: space-between; margin-top: 36px; font-size: 13px; }
+      .slip-head { width: 100%; }
+      @page { size: A4; margin: 12mm; }
     }
   </style>
 </head>
@@ -1144,55 +1148,70 @@
     function wP(runs, extraPr = "") {
       return `<w:p><w:pPr>${extraPr}</w:pPr>${runs}</w:p>`;
     }
-    function wCell(text, width, opts = {}) {
+    function wCell(text, widthPct, opts = {}) {
       const fill = opts.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${opts.fill}"/>` : "";
       const jc = opts.right ? '<w:jc w:val="right"/>' : "";
+      const vAlign = opts.vAlign ? `<w:vAlign w:val="${opts.vAlign}"/>` : "";
+      const span = opts.span ? `<w:gridSpan w:val="${opts.span}"/>` : "";
       const border = opts.borderBottom
         ? `<w:tcBorders><w:bottom w:val="single" w:sz="${opts.borderSize || 4}" w:space="0" w:color="${opts.borderColor || "CCCCCC"}"/></w:tcBorders>`
         : "";
       return `<w:tc><w:tcPr>
-        <w:tcW w:w="${width}" w:type="dxa"/>${fill}${border}
-        <w:tcMar><w:top w:w="80"/><w:left w:w="140"/><w:bottom w:w="80"/><w:right w:w="140"/></w:tcMar>
+        <w:tcW w:w="${widthPct}" w:type="pct"/>${span}${border}${fill}
+        <w:tcMar><w:top w:w="80"/><w:left w:w="60"/><w:bottom w:w="80"/><w:right w:w="60"/></w:tcMar>
+        ${vAlign}
       </w:tcPr>${wP(wRun(text, opts), jc)}</w:tc>`;
+    }
+    function wFullTable(rowsXml, colPcts) {
+      const grid = colPcts.map((pct) => `<w:gridCol w:w="${Math.round(pct * 1.8)}"/>`).join("");
+      return `<w:tbl>
+        <w:tblPr>
+          <w:tblW w:w="5000" w:type="pct"/>
+          <w:jc w:val="center"/>
+          <w:tblInd w:w="0" w:type="dxa"/>
+        </w:tblPr>
+        <w:tblGrid>${grid}</w:tblGrid>
+        ${rowsXml}
+      </w:tbl>`;
     }
     function slipXml(p, c, isLast) {
       const monthText = labelMonth(month);
       const name = p.name || "未命名";
-      const left = 5900;
-      const right = 3738;
+      const left = 3000;
+      const right = 2000;
       const rows = slipRows(c).map(([k, v], i) => {
         const last = i === slipRows(c).length - 1;
-        return `<w:tr>${
-          wCell(k, left, { bold: last, size: last ? 28 : 22, borderBottom: true, borderColor: last ? "7C2430" : "DDDDDD", borderSize: last ? 12 : 4 })
-        }${
-          wCell(v, right, { bold: last, size: last ? 28 : 22, right: true, borderBottom: true, borderColor: last ? "7C2430" : "DDDDDD", borderSize: last ? 12 : 4 })
-        }</w:tr>`;
+        const line = { borderBottom: true, borderColor: last ? "7C2430" : "DDDDDD", borderSize: last ? 12 : 4, bold: last, size: last ? 28 : 22 };
+        return `<w:tr>${wCell(k, left, line)}${wCell(v, right, { ...line, right: true })}</w:tr>`;
       }).join("");
+      const head = wFullTable(
+        `<w:tr>${
+          wCell("GC 女装 / 格丝克洛丝", left, { size: 20, color: "7C2430", noBorder: true })
+        }${
+          wCell("", right, { noBorder: true })
+        }</w:tr>
+         <w:tr>${
+          wCell(`工资条 · ${monthText}`, left, { bold: true, size: 32, borderBottom: true, borderColor: "7C2430", borderSize: 16 })
+        }${
+          wCell(name, right, { bold: true, size: 32, color: "7C2430", right: true, vAlign: "bottom", borderBottom: true, borderColor: "7C2430", borderSize: 16 })
+        }</w:tr>`,
+        [left, right]
+      );
+      const body = wFullTable(rows, [left, right]);
+      const sign = wFullTable(
+        `<w:tr>${
+          wCell("员工确认：____________", left, { size: 22, noBorder: true })
+        }${
+          wCell("日期：____________", right, { size: 22, right: true, noBorder: true })
+        }</w:tr>`,
+        [left, right]
+      );
       return `
-        ${wP(wRun("GC 女装 / 格丝克洛丝", { size: 20, color: "7C2430" }))}
-        ${wP(
-          wRun(`工资条 · ${monthText}`, { bold: true, size: 36 }) +
-          `<w:r><w:tab/></w:r>` +
-          wRun(name, { bold: true, size: 28, color: "7C2430" }),
-          `<w:pBdr><w:bottom w:val="single" w:sz="16" w:space="4" w:color="7C2430"/></w:pBdr>
-           <w:tabs><w:tab w:val="right" w:pos="9638"/></w:tabs>
-           <w:spacing w:after="240"/>`
-        )}
-        <w:tbl>
-          <w:tblPr>
-            <w:tblW w:w="9638" w:type="dxa"/>
-            <w:tblLayout w:type="fixed"/>
-          </w:tblPr>
-          <w:tblGrid><w:gridCol w:w="${left}"/><w:gridCol w:w="${right}"/></w:tblGrid>
-          ${rows}
-        </w:tbl>
-        ${wP("", `<w:spacing w:before="480"/>`)}
-        ${wP(
-          wRun("员工确认：____________", { size: 22 }) +
-          `<w:r><w:tab/></w:r>` +
-          wRun("日期：____________", { size: 22 }),
-          `<w:tabs><w:tab w:val="right" w:pos="9638"/></w:tabs>`
-        )}
+        ${head}
+        ${wP("", `<w:spacing w:before="160"/>`)}
+        ${body}
+        ${wP("", `<w:spacing w:before="400"/>`)}
+        ${sign}
         ${isLast ? "" : wP(`<w:r><w:br w:type="page"/></w:r>`)}`;
     }
     function buildPayrollDocx(people) {
