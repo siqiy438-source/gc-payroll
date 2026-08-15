@@ -243,6 +243,13 @@
     }
     .btn-ghost:hover { background: rgba(176, 137, 79, 0.12); }
     .btn-wine { background: var(--wine); color: #f8f2e7; }
+    .btn-danger {
+      background: transparent;
+      color: var(--wine);
+      border: 1px solid rgba(124, 36, 48, 0.28);
+    }
+    .btn-danger:hover { background: rgba(124, 36, 48, 0.08); }
+    .btn-danger:disabled { opacity: 0.35; cursor: not-allowed; }
 
     .staff-list { display: grid; gap: 14px; }
     .staff-card {
@@ -574,6 +581,7 @@
 
     <div class="toolbar">
       <button class="btn btn-primary" type="button" id="addStaff">＋ 添加员工</button>
+      <button class="btn btn-danger" type="button" id="clearStaff" disabled>一键清空员工</button>
       <button class="btn btn-ghost" type="button" id="printBtn">打印工资条</button>
       <button class="btn btn-ghost" type="button" id="exportBtn">导出 Word 工资条</button>
       <button class="btn btn-ghost" type="button" id="rulesBtn">查看计算规则</button>
@@ -729,6 +737,7 @@
       $("selectHint").textContent = p
         ? `当前选择：${who}。点另一位员工，可改成打印/导出那一份。`
         : "点一位员工，再打印或导出，一次只出这一份。";
+      $("clearStaff").disabled = staffOf().length === 0;
     }
     function render() {
       $("monthLabel").textContent = labelMonth(month);
@@ -967,6 +976,16 @@
     }
 
     $("addStaff").addEventListener("click", () => addStaff());
+    $("clearStaff").addEventListener("click", () => {
+      const people = staffOf();
+      if (!people.length) return;
+      const names = people.map(staffLabel).join("、");
+      const ok = confirm(`清空 ${labelMonth(month)} 的 ${people.length} 位员工？\n${names}\n\n这个月的业绩、半班和补贴都会删掉，其他月份不受影响。`);
+      if (!ok) return;
+      db[month] = [];
+      selectedId = null;
+      render();
+    });
     $("prevMonth").addEventListener("click", () => { month = shiftMonth(month, -1); render(); });
     $("nextMonth").addEventListener("click", () => { month = shiftMonth(month, 1); render(); });
     $("importLast").addEventListener("click", () => {
