@@ -326,6 +326,29 @@
       color: var(--ink);
       outline: none;
     }
+    .extras {
+      margin: 2px 0 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .extras-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 600;
+    }
+    .extra-row {
+      display: grid;
+      grid-template-columns: 1.3fr 0.8fr auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .extra-row .field { min-width: 0; }
+    .extra-row .field input { font-size: 18px; }
     .hint {
       font-size: 12px;
       color: var(--warn);
@@ -500,6 +523,7 @@
           <span class="pill">固定工资 <b id="sumFixed">¥0</b></span>
           <span class="pill">提成 <b id="sumComm">¥0</b></span>
           <span class="pill">加班费 <b id="sumOt">¥0</b></span>
+          <span class="pill" id="sumExtraWrap" hidden>补贴 <b id="sumExtra">¥0</b></span>
           <span class="pill">人数 <b id="sumCount">0</b></span>
         </div>
       </article>
@@ -536,7 +560,8 @@
         <div>业绩 ≤ 80,000：全部按 <b>1%</b> 提成</div>
         <div>业绩 &gt; 80,000：80,000 按 <b>2%</b>，超出部分按 <b>3%</b></div>
         <div>加班：每个半班 <b>30</b> 元</div>
-        <div>应发工资 = 4,000 + 提成 + 加班费</div>
+        <div>特殊补贴：不填就不显示；填了名称和金额后计入应发</div>
+        <div>应发工资 = 4,000 + 提成 + 加班费 + 特殊补贴</div>
       </div>
     </section>
   </div>
@@ -551,6 +576,7 @@
       <li>超过 80,000：80,000 × 2% + 超出部分 × 3%。例：90,000 = 1,600 + 300 = 1,900。</li>
       <li>刚好 80,000 算「未超过」，提成是 800。</li>
       <li>加班按半班计，每个半班 30 元。</li>
+      <li>特殊补贴可自己写名字和金额。空着就不会出现在工资条里；填了就加进应发。</li>
       <li>固定 4,000 会拆成底薪 / 全勤 / 餐补 / 社保列在明细里，但都计入应发。</li>
     </ul>
     <menu><button class="btn btn-primary" type="button" id="closeRules">知道了</button></menu>
@@ -615,15 +641,27 @@
       return round2(BASELINE * 0.02 + (s - BASELINE) * 0.03);
     }
     function round2(n) { return Math.round(n * 100) / 100; }
+    function subsidyItems(person) {
+      return (Array.isArray(person.subsidies) ? person.subsidies : [])
+        .map((s) => ({
+          id: s.id,
+          name: String(s.name || "").trim(),
+          amount: parseMoney(s.amount)
+        }))
+        .filter((s) => s.amount > 0)
+        .map((s) => ({ ...s, label: s.name || "特殊补贴" }));
+    }
     function calc(person) {
       const sales = parseMoney(person.sales);
       const halfShifts = parseMoney(person.halfShifts);
       const comm = commission(sales);
       const ot = round2(halfShifts * OT_RATE);
+      const extras = subsidyItems(person);
+      const extra = round2(extras.reduce((n, s) => n + s.amount, 0));
       return {
-        sales, halfShifts, comm, ot,
+        sales, halfShifts, comm, ot, extras, extra,
         fixed: FIXED_TOTAL,
-        total: round2(FIXED_TOTAL + comm + ot),
+        total: round2(FIXED_TOTAL + comm + ot + extra),
         over: sales > BASELINE,
         gap: sales <= BASELINE ? round2(BASELINE + 1 - sales) : 0
       };
@@ -666,10 +704,11 @@
       staffList.innerHTML = "";
       emptyState.style.display = people.length ? "none" : "block";
 
-      let tFixed = 0, tComm = 0, tOt = 0, tSales = 0, tShifts = 0, tPay = 0;
+      let tFixed = 0, tComm = 0, tOt = 0, tExtra = 0, tSales = 0, tShifts = 0, tPay = 0;
       people.forEach((p, i) => {
         const c = calc(p);
-        tFixed += c.fixed; tComm += c.comm; tOt += c.ot; tSales += c.sales; tShifts += c.halfShifts; tPay += c.total;
+        tFixed += c.fixed; tComm += c.comm; tOt += c.ot; tExtra += c.extra;
+        tSales += c.sales; tShifts += c.halfShifts; tPay += c.total;
         staffList.appendChild(card(p, c, i));
       });
 
@@ -677,6 +716,8 @@
       $("sumFixed").textContent = "¥" + money(tFixed);
       $("sumComm").textContent = "¥" + money(tComm);
       $("sumOt").textContent = "¥" + money(tOt);
+      $("sumExtra").textContent = "¥" + money(tExtra);
+      $("sumExtraWrap").hidden = tExtra <= 0;
       $("sumCount").textContent = String(people.length);
       $("sumSales").textContent = "¥" + money(tSales);
       $("sumShifts").textContent = String(tShifts);
@@ -702,6 +743,22 @@
       const hint = (!c.over && c.sales > 0)
         ? `再做 ¥${money(c.gap)} 就过基准线，提成会从 ¥${money(c.comm)} 跳到 ¥${money(commission(BASELINE + 1))} 起`
         : (c.over ? "已过 80,000 基准，基准内按 2%，超出按 3%" : "");
+      const extraRows = (Array.isArray(p.subsidies) ? p.subsidies : []).map((s) => `
+        <div class="extra-row">
+          <label class="field">
+            <span>补贴名称</span>
+            <input data-k="subName" data-sid="${s.id}" value="${escapeAttr(s.name)}" placeholder="例如：高温补贴" />
+          </label>
+          <label class="field">
+            <span>金额</span>
+            <input data-k="subAmount" data-sid="${s.id}" inputmode="decimal" value="${escapeAttr(s.amount)}" placeholder="0" />
+          </label>
+          <button class="icon-btn" type="button" data-act="del-sub" data-sid="${s.id}">删除</button>
+        </div>
+      `).join("");
+      const extraLines = c.extras.map((s) =>
+        `<div class="row"><span>${escapeAttr(s.label)}</span><span>¥${money(s.amount)}</span></div>`
+      ).join("");
       el.innerHTML = `
         <div class="pick-tag">当前选择</div>
         <div class="staff-top">
@@ -721,9 +778,16 @@
             <input data-k="halfShifts" inputmode="decimal" value="${escapeAttr(p.halfShifts)}" placeholder="0" />
           </label>
         </div>
+        <div class="extras">
+          <div class="extras-head">
+            <span>特殊补贴</span>
+            <button class="icon-btn" type="button" data-act="add-sub">＋ 添加补贴</button>
+          </div>
+          ${extraRows}
+        </div>
         <div class="hint">${hint}</div>
         <details class="breakdown" ${index === 0 ? "open" : ""}>
-          <summary><span>查看明细</span><span>固定 + 提成 + 加班</span></summary>
+          <summary><span>查看明细</span><span>固定 + 提成 + 加班${c.extra ? " + 补贴" : ""}</span></summary>
           <div class="rows">
             <div class="row"><span>固定工资</span><span>¥${money(FIXED_TOTAL)}</span></div>
             <div class="row sub"><span>底薪</span><span>¥${money(FIXED.base)}</span></div>
@@ -733,6 +797,7 @@
             <div class="row"><span>业绩提成</span><span>¥${money(c.comm)}</span></div>
             ${commLine}
             <div class="row"><span>加班费（${c.halfShifts} 个半班 × 30）</span><span>¥${money(c.ot)}</span></div>
+            ${extraLines}
             <div class="row total"><span>应发合计</span><span>¥${money(c.total)}</span></div>
           </div>
         </details>
@@ -750,13 +815,42 @@
       el.querySelectorAll("input").forEach((input) => {
         input.addEventListener("focus", () => selectStaff(p.id));
         input.addEventListener("input", () => {
-          p[input.dataset.k] = input.value;
+          const k = input.dataset.k;
+          if (k === "subName" || k === "subAmount") {
+            const sub = (p.subsidies || []).find((s) => s.id === input.dataset.sid);
+            if (sub) sub[k === "subName" ? "name" : "amount"] = input.value;
+            save();
+            if (k === "subAmount") renderKeepFocus(input);
+            return;
+          }
+          p[k] = input.value;
           save();
-          if (input.dataset.k === "name") updateActionLabels();
+          if (k === "name") updateActionLabels();
           else renderKeepFocus(input);
         });
         input.addEventListener("change", () => {
-          if (input.dataset.k === "name") { save(); updateActionLabels(); return; }
+          if (input.dataset.k === "name" || input.dataset.k === "subName") {
+            save();
+            updateActionLabels();
+            return;
+          }
+          render();
+        });
+      });
+      el.querySelector('[data-act="add-sub"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!Array.isArray(p.subsidies)) p.subsidies = [];
+        const sid = uid();
+        p.subsidies.push({ id: sid, name: "", amount: "" });
+        selectStaff(p.id);
+        render();
+        const next = document.querySelector(`.staff-card[data-id="${p.id}"] input[data-k="subName"][data-sid="${sid}"]`);
+        if (next) next.focus();
+      });
+      el.querySelectorAll('[data-act="del-sub"]').forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          p.subsidies = (p.subsidies || []).filter((s) => s.id !== btn.dataset.sid);
           render();
         });
       });
@@ -779,7 +873,13 @@
       });
       el.querySelector('[data-act="dup"]').addEventListener("click", (e) => {
         e.stopPropagation();
-        const copy = { id: uid(), name: p.name ? p.name + "（副本）" : "", sales: p.sales, halfShifts: p.halfShifts };
+        const copy = {
+          id: uid(),
+          name: p.name ? p.name + "（副本）" : "",
+          sales: p.sales,
+          halfShifts: p.halfShifts,
+          subsidies: (p.subsidies || []).map((s) => ({ id: uid(), name: s.name, amount: s.amount }))
+        };
         staffOf().push(copy);
         selectedId = copy.id;
         render();
@@ -790,9 +890,13 @@
     function renderKeepFocus(input) {
       const id = input.closest(".staff-card").dataset.id;
       const key = input.dataset.k;
+      const sid = input.dataset.sid;
       const start = input.selectionStart;
       render();
-      const next = document.querySelector(`.staff-card[data-id="${id}"] input[data-k="${key}"]`);
+      const sel = sid
+        ? `.staff-card[data-id="${id}"] input[data-k="${key}"][data-sid="${sid}"]`
+        : `.staff-card[data-id="${id}"] input[data-k="${key}"]`;
+      const next = document.querySelector(sel);
       if (next) {
         next.focus();
         try { next.setSelectionRange(start, start); } catch {}
@@ -832,7 +936,7 @@
     $("closeRules").addEventListener("click", () => $("rulesDialog").close());
 
     function slipRows(c) {
-      return [
+      const rows = [
         ["本月业绩", `¥${money(c.sales)}`],
         ["提成", `¥${money(c.comm)}`],
         ["半班数 / 加班费", `${c.halfShifts} × 30 = ¥${money(c.ot)}`],
@@ -840,9 +944,11 @@
         ["全勤奖", `¥${money(FIXED.attendance)}`],
         ["餐补", `¥${money(FIXED.meal)}`],
         ["社保", `¥${money(FIXED.social)}`],
-        ["固定工资小计", `¥${money(FIXED_TOTAL)}`],
-        ["应发合计", `¥${money(c.total)}`]
+        ["固定工资小计", `¥${money(FIXED_TOTAL)}`]
       ];
+      c.extras.forEach((s) => rows.push([s.label, `¥${money(s.amount)}`]));
+      rows.push(["应发合计", `¥${money(c.total)}`]);
+      return rows;
     }
 
     function requireSelected() {
