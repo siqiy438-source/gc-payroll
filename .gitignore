@@ -1,4 +1,5 @@
 .DS_Store
 preview-*.png
+test-output.docx
 __pycache__/
 *.pyc

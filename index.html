@@ -493,7 +493,7 @@
     <div class="toolbar">
       <button class="btn btn-primary" type="button" id="addStaff">＋ 添加员工</button>
       <button class="btn btn-ghost" type="button" id="printBtn">打印工资条</button>
-      <button class="btn btn-ghost" type="button" id="exportBtn">导出 CSV</button>
+      <button class="btn btn-ghost" type="button" id="exportBtn">导出 Word 工资条</button>
       <button class="btn btn-ghost" type="button" id="rulesBtn">查看计算规则</button>
     </div>
 
@@ -745,17 +745,29 @@
     $("rulesBtn").addEventListener("click", () => $("rulesDialog").showModal());
     $("closeRules").addEventListener("click", () => $("rulesDialog").close());
 
+    function slipRows(c) {
+      return [
+        ["本月业绩", `¥${money(c.sales)}`],
+        ["提成", `¥${money(c.comm)}`],
+        ["半班数 / 加班费", `${c.halfShifts} × 30 = ¥${money(c.ot)}`],
+        ["底薪", `¥${money(FIXED.base)}`],
+        ["全勤奖", `¥${money(FIXED.attendance)}`],
+        ["餐补", `¥${money(FIXED.meal)}`],
+        ["社保", `¥${money(FIXED.social)}`],
+        ["固定工资小计", `¥${money(FIXED_TOTAL)}`],
+        ["应发合计", `¥${money(c.total)}`]
+      ];
+    }
+
     $("exportBtn").addEventListener("click", () => {
-      const rows = [["月份","姓名","业绩","提成","半班数","加班费","底薪","全勤奖","餐补","社保","固定工资","应发合计"]];
-      staffOf().forEach((p) => {
-        const c = calc(p);
-        rows.push([month, p.name, c.sales, c.comm, c.halfShifts, c.ot, FIXED.base, FIXED.attendance, FIXED.meal, FIXED.social, c.fixed, c.total]);
+      const people = staffOf();
+      if (!people.length) { alert("先添加员工再导出。"); return; }
+      const blob = new Blob([buildPayrollDocx(people)], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       });
-      const csv = rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
-      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `GC工资台账-${month}.csv`;
+      a.download = `GC工资条-${month}.docx`;
       a.click();
       URL.revokeObjectURL(a.href);
     });
@@ -765,6 +777,10 @@
       if (!people.length) { alert("先添加员工再打印。"); return; }
       $("slips").innerHTML = people.map((p) => {
         const c = calc(p);
+        const rows = slipRows(c).map(([k, v], i) => {
+          const cls = i === slipRows(c).length - 1 ? ' class="big"' : "";
+          return `<tr><td${cls}>${k}</td><td${cls}>${v}</td></tr>`;
+        }).join("");
         return `
           <section class="slip">
             <div class="slip-head">
@@ -774,22 +790,213 @@
               </div>
               <div>${p.name || "未命名"}</div>
             </div>
-            <table>
-              <tr><td>本月业绩</td><td>¥${money(c.sales)}</td></tr>
-              <tr><td>提成</td><td>¥${money(c.comm)}</td></tr>
-              <tr><td>半班数 / 加班费</td><td>${c.halfShifts} × 30 = ¥${money(c.ot)}</td></tr>
-              <tr><td>底薪</td><td>¥${money(FIXED.base)}</td></tr>
-              <tr><td>全勤奖</td><td>¥${money(FIXED.attendance)}</td></tr>
-              <tr><td>餐补</td><td>¥${money(FIXED.meal)}</td></tr>
-              <tr><td>社保</td><td>¥${money(FIXED.social)}</td></tr>
-              <tr><td>固定工资小计</td><td>¥${money(FIXED_TOTAL)}</td></tr>
-              <tr><td class="big">应发合计</td><td class="big">¥${money(c.total)}</td></tr>
-            </table>
+            <table>${rows}</table>
             <div class="sign"><span>员工确认：____________</span><span>日期：____________</span></div>
           </section>`;
       }).join("");
       window.print();
     });
+
+    function xmlEscape(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function u16(n) {
+      const b = new Uint8Array(2);
+      new DataView(b.buffer).setUint16(0, n, true);
+      return b;
+    }
+    function u32(n) {
+      const b = new Uint8Array(4);
+      new DataView(b.buffer).setUint32(0, n, true);
+      return b;
+    }
+    function concatBytes(parts) {
+      const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+      let o = 0;
+      for (const p of parts) { out.set(p, o); o += p.length; }
+      return out;
+    }
+    const CRC_TABLE = (() => {
+      const t = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[i] = c >>> 0;
+      }
+      return t;
+    })();
+    function crc32(data) {
+      let c = 0xFFFFFFFF;
+      for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+    function zipStore(files) {
+      const enc = new TextEncoder();
+      const locals = [];
+      const centrals = [];
+      let offset = 0;
+      const now = new Date();
+      const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xffff;
+      const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xffff;
+      for (const file of files) {
+        const name = enc.encode(file.name);
+        const data = file.data;
+        const crc = crc32(data);
+        const local = concatBytes([
+          enc.encode("PK\x03\x04"), u16(20), u16(0), u16(0),
+          u16(dosTime), u16(dosDate), u32(crc), u32(data.length), u32(data.length),
+          u16(name.length), u16(0), name, data
+        ]);
+        locals.push(local);
+        centrals.push(concatBytes([
+          enc.encode("PK\x01\x02"), u16(20), u16(20), u16(0), u16(0),
+          u16(dosTime), u16(dosDate), u32(crc), u32(data.length), u32(data.length),
+          u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name
+        ]));
+        offset += local.length;
+      }
+      const central = concatBytes(centrals);
+      return concatBytes([
+        ...locals, central,
+        concatBytes([
+          enc.encode("PK\x05\x06"), u16(0), u16(0),
+          u16(files.length), u16(files.length),
+          u32(central.length), u32(offset), u16(0)
+        ])
+      ]);
+    }
+    function wRun(text, opts = {}) {
+      const size = opts.size || 22;
+      return `<w:r><w:rPr>
+        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="宋体" w:cs="Calibri"/>
+        <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
+        ${opts.bold ? "<w:b/><w:bCs/>" : ""}
+        ${opts.color ? `<w:color w:val="${opts.color}"/>` : ""}
+      </w:rPr><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
+    }
+    function wP(runs, extraPr = "") {
+      return `<w:p><w:pPr>${extraPr}</w:pPr>${runs}</w:p>`;
+    }
+    function wCell(text, width, opts = {}) {
+      const fill = opts.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${opts.fill}"/>` : "";
+      const jc = opts.right ? '<w:jc w:val="right"/>' : "";
+      const border = opts.borderBottom
+        ? `<w:tcBorders><w:bottom w:val="single" w:sz="${opts.borderSize || 4}" w:space="0" w:color="${opts.borderColor || "CCCCCC"}"/></w:tcBorders>`
+        : "";
+      return `<w:tc><w:tcPr>
+        <w:tcW w:w="${width}" w:type="dxa"/>${fill}${border}
+        <w:tcMar><w:top w:w="80"/><w:left w:w="140"/><w:bottom w:w="80"/><w:right w:w="140"/></w:tcMar>
+      </w:tcPr>${wP(wRun(text, opts), jc)}</w:tc>`;
+    }
+    function slipXml(p, c, isLast) {
+      const monthText = labelMonth(month);
+      const name = p.name || "未命名";
+      const left = 5900;
+      const right = 3738;
+      const rows = slipRows(c).map(([k, v], i) => {
+        const last = i === slipRows(c).length - 1;
+        return `<w:tr>${
+          wCell(k, left, { bold: last, size: last ? 28 : 22, borderBottom: true, borderColor: last ? "7C2430" : "DDDDDD", borderSize: last ? 12 : 4 })
+        }${
+          wCell(v, right, { bold: last, size: last ? 28 : 22, right: true, borderBottom: true, borderColor: last ? "7C2430" : "DDDDDD", borderSize: last ? 12 : 4 })
+        }</w:tr>`;
+      }).join("");
+      return `
+        ${wP(wRun("GC 女装 / 格丝克洛丝", { size: 20, color: "7C2430" }))}
+        ${wP(
+          wRun(`工资条 · ${monthText}`, { bold: true, size: 36 }) +
+          `<w:r><w:tab/></w:r>` +
+          wRun(name, { bold: true, size: 28, color: "7C2430" }),
+          `<w:pBdr><w:bottom w:val="single" w:sz="16" w:space="4" w:color="7C2430"/></w:pBdr>
+           <w:tabs><w:tab w:val="right" w:pos="9638"/></w:tabs>
+           <w:spacing w:after="240"/>`
+        )}
+        <w:tbl>
+          <w:tblPr>
+            <w:tblW w:w="9638" w:type="dxa"/>
+            <w:tblLayout w:type="fixed"/>
+          </w:tblPr>
+          <w:tblGrid><w:gridCol w:w="${left}"/><w:gridCol w:w="${right}"/></w:tblGrid>
+          ${rows}
+        </w:tbl>
+        ${wP("", `<w:spacing w:before="480"/>`)}
+        ${wP(
+          wRun("员工确认：____________", { size: 22 }) +
+          `<w:r><w:tab/></w:r>` +
+          wRun("日期：____________", { size: 22 }),
+          `<w:tabs><w:tab w:val="right" w:pos="9638"/></w:tabs>`
+        )}
+        ${isLast ? "" : wP(`<w:r><w:br w:type="page"/></w:r>`)}`;
+    }
+    function buildPayrollDocx(people) {
+      const enc = new TextEncoder();
+      const body = people.map((p, i) => slipXml(p, calc(p), i === people.length - 1)).join("");
+      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            ${body}
+            <w:sectPr>
+              <w:pgSz w:w="11906" w:h="16838"/>
+              <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="720" w:footer="720" w:gutter="0"/>
+            </w:sectPr>
+          </w:body>
+        </w:document>`;
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:docDefaults>
+            <w:rPrDefault><w:rPr>
+              <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="宋体" w:cs="Calibri"/>
+              <w:sz w:val="22"/><w:szCs w:val="22"/>
+            </w:rPr></w:rPrDefault>
+          </w:docDefaults>
+          <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+            <w:name w:val="Normal"/>
+            <w:qFormat/>
+          </w:style>
+        </w:styles>`;
+      const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+          <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+          <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+        </Types>`;
+      const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+          <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+        </Relationships>`;
+      const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+        </Relationships>`;
+      const created = new Date().toISOString();
+      const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <dc:title>GC 女装工资条 · ${xmlEscape(labelMonth(month))}</dc:title>
+          <dc:creator>GC 女装工资台账</dc:creator>
+          <cp:lastModifiedBy>GC 女装工资台账</cp:lastModifiedBy>
+          <dcterms:created xsi:type="dcterms:W3CDTF">${created}</dcterms:created>
+          <dcterms:modified xsi:type="dcterms:W3CDTF">${created}</dcterms:modified>
+        </cp:coreProperties>`;
+      const app = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+          <Application>GC Payroll</Application>
+        </Properties>`;
+      const toBytes = (s) => enc.encode(s.replace(/>\s+</g, "><").trim());
+      return zipStore([
+        { name: "[Content_Types].xml", data: toBytes(contentTypes) },
+        { name: "_rels/.rels", data: toBytes(rels) },
+        { name: "word/document.xml", data: toBytes(documentXml) },
+        { name: "word/_rels/document.xml.rels", data: toBytes(docRels) },
+        { name: "word/styles.xml", data: toBytes(stylesXml) },
+        { name: "docProps/core.xml", data: toBytes(core) },
+        { name: "docProps/app.xml", data: toBytes(app) }
+      ]);
+    }
 
     // Self-check against the store rules
     (function assertRules() {
