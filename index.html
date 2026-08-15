@@ -335,20 +335,53 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
       font-size: 11px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--ink-faint);
       font-weight: 600;
     }
+    .extras-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .sub-btn {
+      border: 1px solid var(--gold-line);
+      background: transparent;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border-radius: 999px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .sub-btn:hover { background: rgba(176, 137, 79, 0.12); }
+    .sub-btn-del { color: var(--wine); border-color: rgba(124, 36, 48, 0.28); }
+    .sub-btn-del:hover { background: rgba(124, 36, 48, 0.08); }
+    .sub-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .extra-row {
       display: grid;
       grid-template-columns: 1.3fr 0.8fr auto;
       gap: 8px;
-      align-items: stretch;
+      align-items: center;
     }
     .extra-row .field { min-width: 0; }
     .extra-row .field input { font-size: 18px; }
+    .sub-del {
+      border: 1px solid rgba(124, 36, 48, 0.28);
+      background: rgba(124, 36, 48, 0.06);
+      color: var(--wine);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 44px;
+    }
+    .sub-del:hover { background: rgba(124, 36, 48, 0.12); }
     .hint {
       font-size: 12px;
       color: var(--warn);
@@ -753,7 +786,7 @@
             <span>金额</span>
             <input data-k="subAmount" data-sid="${s.id}" inputmode="decimal" value="${escapeAttr(s.amount)}" placeholder="0" />
           </label>
-          <button class="icon-btn" type="button" data-act="del-sub" data-sid="${s.id}">删除</button>
+          <button class="sub-del" type="button" data-act="del-sub" data-sid="${s.id}">删除</button>
         </div>
       `).join("");
       const extraLines = c.extras.map((s) =>
@@ -781,7 +814,10 @@
         <div class="extras">
           <div class="extras-head">
             <span>特殊补贴</span>
-            <button class="icon-btn" type="button" data-act="add-sub">＋ 添加补贴</button>
+            <div class="extras-actions">
+              <button class="sub-btn" type="button" data-act="add-sub">＋ 添加补贴</button>
+              <button class="sub-btn sub-btn-del" type="button" data-act="del-last-sub" ${(p.subsidies || []).length ? "" : "disabled"}>− 删除补贴</button>
+            </div>
           </div>
           ${extraRows}
         </div>
@@ -846,6 +882,13 @@
         render();
         const next = document.querySelector(`.staff-card[data-id="${p.id}"] input[data-k="subName"][data-sid="${sid}"]`);
         if (next) next.focus();
+      });
+      el.querySelector('[data-act="del-last-sub"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!(p.subsidies || []).length) return;
+        p.subsidies = p.subsidies.slice(0, -1);
+        selectStaff(p.id);
+        render();
       });
       el.querySelectorAll('[data-act="del-sub"]').forEach((btn) => {
         btn.addEventListener("click", (e) => {
