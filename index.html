@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1B1612" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GC工资台账" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>GC 女装 · 工资台账</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+SC:wght@500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #efe6d6;
+      --paper-deep: #e4d8c4;
+      --card: #f8f2e7;
+      --ink: #1b1612;
+      --ink-soft: #5e554c;
+      --ink-faint: #8a8074;
+      --wine: #7c2430;
+      --wine-deep: #531820;
+      --gold: #b0894f;
+      --gold-line: rgba(176, 137, 79, 0.38);
+      --ok: #2d5a38;
+      --warn: #8d4e14;
+      --shadow: 0 18px 40px rgba(27, 22, 18, 0.08);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: "Outfit", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.45;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(900px 480px at 8% -10%, rgba(124, 36, 48, 0.08), transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, rgba(176, 137, 79, 0.14), transparent 50%),
+        repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(27, 22, 18, 0.025) 32px);
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.09;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 2;
+      width: min(920px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 28px 0 80px;
+    }
+
+    header.mast {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: end;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--gold-line);
+      margin-bottom: 22px;
+    }
+    .seal {
+      width: 68px;
+      height: 68px;
+      border: 2px solid var(--wine);
+      color: var(--wine);
+      display: grid;
+      place-items: center;
+      font-family: "Cormorant Garamond", serif;
+      font-style: italic;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      box-shadow: inset 0 0 0 4px rgba(124, 36, 48, 0.18);
+      transform: rotate(-6deg);
+      background: rgba(124, 36, 48, 0.04);
+    }
+    .brand .kicker {
+      font-size: 11px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 600;
+    }
+    .brand h1 {
+      font-family: "Noto Serif SC", serif;
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 1.1;
+      margin-top: 4px;
+    }
+    .brand p {
+      margin-top: 6px;
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+    .month-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--gold-line);
+      padding: 8px 10px;
+      border-radius: 999px;
+    }
+    .month-nav button {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      background: var(--ink);
+      color: var(--paper);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .month-nav button:hover { background: var(--wine); }
+    .month-label {
+      min-width: 108px;
+      text-align: center;
+      font-family: "Noto Serif SC", serif;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .hero-card, .staff-card, .panel, .empty {
+      background: var(--card);
+      border: 1px solid rgba(27, 22, 18, 0.06);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+    }
+    .hero-card {
+      padding: 22px 24px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::after {
+      content: "PAYROLL";
+      position: absolute;
+      right: -8px;
+      bottom: -18px;
+      font-family: "Cormorant Garamond", serif;
+      font-style: italic;
+      font-size: 72px;
+      color: rgba(124, 36, 48, 0.06);
+      letter-spacing: 0.04em;
+    }
+    .hero-card .label, .stat .label, .field label {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 600;
+    }
+    .grand {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(40px, 7vw, 64px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 8px 0 14px;
+    }
+    .grand small {
+      font-size: 0.42em;
+      margin-right: 4px;
+      color: var(--wine);
+      font-weight: 500;
+    }
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+    .pill {
+      background: rgba(27, 22, 18, 0.05);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+    .pill b { color: var(--ink); font-weight: 600; }
+    .stats {
+      display: grid;
+      gap: 10px;
+    }
+    .stat {
+      padding: 16px 18px;
+    }
+    .stat .num {
+      font-variant-numeric: tabular-nums;
+      font-size: 26px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 16px;
+    }
+    button.btn, .file-btn {
+      border: 0;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border-radius: 999px;
+      padding: 11px 16px;
+    }
+    .btn-primary { background: var(--ink); color: var(--paper); }
+    .btn-primary:hover { background: var(--wine); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--gold-line);
+    }
+    .btn-ghost:hover { background: rgba(176, 137, 79, 0.12); }
+    .btn-wine { background: var(--wine); color: #f8f2e7; }
+
+    .staff-list { display: grid; gap: 14px; }
+    .staff-card { padding: 18px 18px 14px; }
+    .staff-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+    .name-input {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-family: "Noto Serif SC", serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink);
+      outline: none;
+      border-bottom: 1px dashed transparent;
+    }
+    .name-input:focus { border-bottom-color: var(--gold); }
+    .name-input::placeholder { color: #c2b8aa; font-weight: 500; }
+    .pay-block { text-align: right; }
+    .pay-block .tiny {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .pay-block .sum {
+      font-variant-numeric: tabular-nums;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      color: var(--wine-deep);
+    }
+    .fields {
+      display: grid;
+      grid-template-columns: 1.4fr 0.8fr;
+      gap: 10px;
+      margin: 16px 0 10px;
+    }
+    .field {
+      background: rgba(27, 22, 18, 0.035);
+      border-radius: 16px;
+      padding: 10px 12px 8px;
+    }
+    .field input {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-family: "Outfit", sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      outline: none;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--warn);
+      min-height: 18px;
+      margin-bottom: 6px;
+    }
+    .breakdown {
+      border-top: 1px solid var(--gold-line);
+      padding-top: 10px;
+    }
+    .breakdown summary {
+      cursor: pointer;
+      list-style: none;
+      font-size: 13px;
+      color: var(--ink-soft);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .breakdown summary::-webkit-details-marker { display: none; }
+    .rows { margin-top: 10px; display: grid; gap: 6px; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    .row.sub { padding-left: 14px; color: var(--ink-faint); font-size: 12px; }
+    .row.total {
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid var(--gold-line);
+      color: var(--ink);
+      font-weight: 650;
+      font-size: 14px;
+    }
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .icon-btn {
+      border: 0;
+      background: transparent;
+      color: var(--ink-faint);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .icon-btn:hover { color: var(--wine); }
+
+    .empty {
+      padding: 36px 20px;
+      text-align: center;
+    }
+    .empty h2 {
+      font-family: "Noto Serif SC", serif;
+      font-weight: 600;
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+    .empty p { color: var(--ink-soft); font-size: 14px; }
+
+    .panel {
+      margin-top: 18px;
+      padding: 20px 22px;
+    }
+    .panel h3 {
+      font-family: "Noto Serif SC", serif;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .rules { color: var(--ink-soft); font-size: 13.5px; display: grid; gap: 8px; }
+    .rules b { color: var(--ink); }
+    .banner {
+      display: none;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(124, 36, 48, 0.08);
+      color: var(--wine-deep);
+      font-size: 13px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .banner.show { display: flex; }
+
+    dialog {
+      border: 0;
+      border-radius: 24px;
+      width: min(520px, calc(100vw - 28px));
+      padding: 24px;
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: 0 30px 80px rgba(27, 22, 18, 0.25);
+    }
+    dialog::backdrop { background: rgba(27, 22, 18, 0.45); }
+    dialog h3 { font-family: "Noto Serif SC", serif; font-size: 22px; margin-bottom: 10px; }
+    dialog p, dialog li { font-size: 14px; color: var(--ink-soft); }
+    dialog ul { padding-left: 18px; display: grid; gap: 6px; }
+    dialog menu { margin-top: 18px; display: flex; justify-content: flex-end; }
+
+    .slips { display: none; }
+
+    @media (max-width: 740px) {
+      .wrap { width: min(100% - 20px, 920px); padding-top: 18px; }
+      header.mast {
+        grid-template-columns: auto 1fr;
+        align-items: start;
+      }
+      .month-nav { grid-column: 1 / -1; justify-content: space-between; }
+      .hero, .fields { grid-template-columns: 1fr; }
+      .pay-block { text-align: left; }
+      .grand { font-size: 44px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      body::before, body::after, header.mast, .hero, .toolbar, .staff-list, .panel, .banner { display: none !important; }
+      .wrap { width: 100%; padding: 0; }
+      .slips { display: block; }
+      .slip {
+        break-after: page;
+        border: 1px solid #1b1612;
+        padding: 28px;
+        margin: 0 0 24px;
+      }
+      .slip:last-child { break-after: auto; }
+      .slip-head {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 2px solid #7c2430;
+        padding-bottom: 10px;
+        margin-bottom: 16px;
+      }
+      .slip h2 { font-family: "Noto Serif SC", serif; font-size: 22px; }
+      .slip table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .slip td { padding: 6px 0; border-bottom: 1px solid #ddd; }
+      .slip .big { font-size: 28px; font-weight: 700; padding-top: 12px; }
+      .sign { display: flex; justify-content: space-between; margin-top: 36px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="mast">
+      <div class="seal" aria-hidden="true">GC</div>
+      <div class="brand">
+        <div class="kicker">Grace Cloth · Guiyang</div>
+        <h1>工资台账</h1>
+        <p>格丝克洛丝 · 提成 / 加班 / 固定工资自动核算</p>
+      </div>
+      <div class="month-nav">
+        <button type="button" id="prevMonth" aria-label="上个月">‹</button>
+        <div class="month-label" id="monthLabel">2026年8月</div>
+        <button type="button" id="nextMonth" aria-label="下个月">›</button>
+      </div>
+    </header>
+
+    <div class="banner" id="importBanner">
+      <span id="importText"></span>
+      <button class="btn btn-wine" type="button" id="importLast">带入名单</button>
+    </div>
+
+    <section class="hero">
+      <article class="hero-card">
+        <div class="label">本月应发合计</div>
+        <div class="grand" id="grandTotal"><small>¥</small>0</div>
+        <div class="pills">
+          <span class="pill">固定工资 <b id="sumFixed">¥0</b></span>
+          <span class="pill">提成 <b id="sumComm">¥0</b></span>
+          <span class="pill">加班费 <b id="sumOt">¥0</b></span>
+          <span class="pill">人数 <b id="sumCount">0</b></span>
+        </div>
+      </article>
+      <div class="stats">
+        <article class="hero-card stat">
+          <div class="label">本月总业绩</div>
+          <div class="num" id="sumSales">¥0</div>
+        </article>
+        <article class="hero-card stat">
+          <div class="label">半班合计</div>
+          <div class="num" id="sumShifts">0</div>
+        </article>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" type="button" id="addStaff">＋ 添加员工</button>
+      <button class="btn btn-ghost" type="button" id="printBtn">打印工资条</button>
+      <button class="btn btn-ghost" type="button" id="exportBtn">导出 CSV</button>
+      <button class="btn btn-ghost" type="button" id="rulesBtn">查看计算规则</button>
+    </div>
+
+    <div class="staff-list" id="staffList"></div>
+    <div class="empty" id="emptyState">
+      <h2>本月还没有人</h2>
+      <p>点「添加员工」，填姓名、业绩和半班数，工资会自动算出来。</p>
+    </div>
+
+    <section class="panel">
+      <h3>店规摘要</h3>
+      <div class="rules">
+        <div>固定工资 <b>4,000</b> = 底薪 2,000 + 全勤奖 400 + 餐补 400 + 社保 1,200</div>
+        <div>业绩 ≤ 80,000：全部按 <b>1%</b> 提成</div>
+        <div>业绩 &gt; 80,000：80,000 按 <b>2%</b>，超出部分按 <b>3%</b></div>
+        <div>加班：每个半班 <b>30</b> 元</div>
+        <div>应发工资 = 4,000 + 提成 + 加班费</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="slips" id="slips"></div>
+
+  <dialog id="rulesDialog">
+    <h3>工资怎么算</h3>
+    <ul>
+      <li>每人每月业绩基准 <b>80,000</b> 元。</li>
+      <li>未超过 80,000：全部按 1%。例：75,000 × 1% = 750。</li>
+      <li>超过 80,000：80,000 × 2% + 超出部分 × 3%。例：90,000 = 1,600 + 300 = 1,900。</li>
+      <li>刚好 80,000 算「未超过」，提成是 800。</li>
+      <li>加班按半班计，每个半班 30 元。</li>
+      <li>固定 4,000 会拆成底薪 / 全勤 / 餐补 / 社保列在明细里，但都计入应发。</li>
+    </ul>
+    <menu><button class="btn btn-primary" type="button" id="closeRules">知道了</button></menu>
+  </dialog>
+
+  <script>
+    const FIXED = { base: 2000, attendance: 400, meal: 400, social: 1200 };
+    const FIXED_TOTAL = FIXED.base + FIXED.attendance + FIXED.meal + FIXED.social;
+    const BASELINE = 80000;
+    const OT_RATE = 30;
+    const STORE_KEY = "gc-payroll-v1";
+
+    const $ = (id) => document.getElementById(id);
+    const staffList = $("staffList");
+    const emptyState = $("emptyState");
+
+    let month = currentMonthKey();
+    let db = load();
+
+    function currentMonthKey(d = new Date()) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }
+    function labelMonth(key) {
+      const [y, m] = key.split("-");
+      return `${y}年${Number(m)}月`;
+    }
+    function shiftMonth(key, delta) {
+      const [y, m] = key.split("-").map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return currentMonthKey(d);
+    }
+    function load() {
+      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+      catch { return {}; }
+    }
+    function save() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(db));
+    }
+    function staffOf(key = month) {
+      if (!db[key]) db[key] = [];
+      return db[key];
+    }
+    function uid() {
+      return Math.random().toString(36).slice(2, 10);
+    }
+    function parseMoney(raw) {
+      if (raw == null) return 0;
+      let s = String(raw).trim().replace(/,/g, "").replace(/￥|¥/g, "");
+      if (!s) return 0;
+      const wan = s.match(/^(-?\d+(?:\.\d+)?)万$/);
+      if (wan) return Math.round(Number(wan[1]) * 10000 * 100) / 100;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    }
+    function money(n) {
+      return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+    function commission(sales) {
+      const s = Number(sales) || 0;
+      if (s <= BASELINE) return round2(s * 0.01);
+      return round2(BASELINE * 0.02 + (s - BASELINE) * 0.03);
+    }
+    function round2(n) { return Math.round(n * 100) / 100; }
+    function calc(person) {
+      const sales = parseMoney(person.sales);
+      const halfShifts = parseMoney(person.halfShifts);
+      const comm = commission(sales);
+      const ot = round2(halfShifts * OT_RATE);
+      return {
+        sales, halfShifts, comm, ot,
+        fixed: FIXED_TOTAL,
+        total: round2(FIXED_TOTAL + comm + ot),
+        over: sales > BASELINE,
+        gap: sales <= BASELINE ? round2(BASELINE + 1 - sales) : 0
+      };
+    }
+
+    function render() {
+      $("monthLabel").textContent = labelMonth(month);
+      const people = staffOf();
+      staffList.innerHTML = "";
+      emptyState.style.display = people.length ? "none" : "block";
+
+      let tFixed = 0, tComm = 0, tOt = 0, tSales = 0, tShifts = 0, tPay = 0;
+      people.forEach((p, i) => {
+        const c = calc(p);
+        tFixed += c.fixed; tComm += c.comm; tOt += c.ot; tSales += c.sales; tShifts += c.halfShifts; tPay += c.total;
+        staffList.appendChild(card(p, c, i));
+      });
+
+      $("grandTotal").innerHTML = `<small>¥</small>${money(tPay)}`;
+      $("sumFixed").textContent = "¥" + money(tFixed);
+      $("sumComm").textContent = "¥" + money(tComm);
+      $("sumOt").textContent = "¥" + money(tOt);
+      $("sumCount").textContent = String(people.length);
+      $("sumSales").textContent = "¥" + money(tSales);
+      $("sumShifts").textContent = String(tShifts);
+
+      const prev = shiftMonth(month, -1);
+      const canImport = people.length === 0 && (db[prev] || []).length > 0;
+      $("importBanner").classList.toggle("show", canImport);
+      if (canImport) {
+        $("importText").textContent = `${labelMonth(prev)}有 ${(db[prev] || []).length} 位员工，要带入本月名单吗？业绩和半班会留空。`;
+      }
+      save();
+    }
+
+    function card(p, c, index) {
+      const el = document.createElement("article");
+      el.className = "staff-card";
+      el.dataset.id = p.id;
+      const commLine = c.over
+        ? `<div class="row sub"><span>80,000 × 2%</span><span>¥${money(1600)}</span></div>
+           <div class="row sub"><span>超出 ${money(c.sales - BASELINE)} × 3%</span><span>¥${money(c.comm - 1600)}</span></div>`
+        : `<div class="row sub"><span>${money(c.sales)} × 1%</span><span>¥${money(c.comm)}</span></div>`;
+      const hint = (!c.over && c.sales > 0)
+        ? `再做 ¥${money(c.gap)} 就过基准线，提成会从 ¥${money(c.comm)} 跳到 ¥${money(commission(BASELINE + 1))} 起`
+        : (c.over ? "已过 80,000 基准，基准内按 2%，超出按 3%" : "");
+      el.innerHTML = `
+        <div class="staff-top">
+          <input class="name-input" data-k="name" value="${escapeAttr(p.name)}" placeholder="员工姓名" />
+          <div class="pay-block">
+            <div class="tiny">应发工资</div>
+            <div class="sum">¥${money(c.total)}</div>
+          </div>
+        </div>
+        <div class="fields">
+          <label class="field">
+            <span>本月业绩</span>
+            <input data-k="sales" inputmode="decimal" value="${escapeAttr(p.sales)}" placeholder="80000 或 8万" />
+          </label>
+          <label class="field">
+            <span>半班数</span>
+            <input data-k="halfShifts" inputmode="decimal" value="${escapeAttr(p.halfShifts)}" placeholder="0" />
+          </label>
+        </div>
+        <div class="hint">${hint}</div>
+        <details class="breakdown" ${index === 0 ? "open" : ""}>
+          <summary><span>查看明细</span><span>固定 + 提成 + 加班</span></summary>
+          <div class="rows">
+            <div class="row"><span>固定工资</span><span>¥${money(FIXED_TOTAL)}</span></div>
+            <div class="row sub"><span>底薪</span><span>¥${money(FIXED.base)}</span></div>
+            <div class="row sub"><span>全勤奖</span><span>¥${money(FIXED.attendance)}</span></div>
+            <div class="row sub"><span>餐补</span><span>¥${money(FIXED.meal)}</span></div>
+            <div class="row sub"><span>社保</span><span>¥${money(FIXED.social)}</span></div>
+            <div class="row"><span>业绩提成</span><span>¥${money(c.comm)}</span></div>
+            ${commLine}
+            <div class="row"><span>加班费（${c.halfShifts} 个半班 × 30）</span><span>¥${money(c.ot)}</span></div>
+            <div class="row total"><span>应发合计</span><span>¥${money(c.total)}</span></div>
+          </div>
+        </details>
+        <div class="card-actions">
+          <button class="icon-btn" type="button" data-act="dup">复制此人</button>
+          <button class="icon-btn" type="button" data-act="del">删除</button>
+        </div>
+      `;
+      el.querySelectorAll("input").forEach((input) => {
+        input.addEventListener("input", () => {
+          p[input.dataset.k] = input.value;
+          save();
+          if (input.dataset.k !== "name") renderKeepFocus(input);
+        });
+        input.addEventListener("change", () => {
+          if (input.dataset.k === "name") { save(); return; }
+          render();
+        });
+      });
+      el.querySelector('[data-act="del"]').addEventListener("click", () => {
+        if (!confirm(`删除 ${p.name || "这位员工"}？`)) return;
+        db[month] = staffOf().filter((x) => x.id !== p.id);
+        render();
+      });
+      el.querySelector('[data-act="dup"]').addEventListener("click", () => {
+        staffOf().push({ id: uid(), name: p.name ? p.name + "（副本）" : "", sales: p.sales, halfShifts: p.halfShifts });
+        render();
+      });
+      return el;
+    }
+
+    function renderKeepFocus(input) {
+      const id = input.closest(".staff-card").dataset.id;
+      const key = input.dataset.k;
+      const start = input.selectionStart;
+      render();
+      const next = document.querySelector(`.staff-card[data-id="${id}"] input[data-k="${key}"]`);
+      if (next) {
+        next.focus();
+        try { next.setSelectionRange(start, start); } catch {}
+      }
+    }
+
+    function escapeAttr(v) {
+      return String(v ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function addStaff(preset = {}) {
+      staffOf().push({
+        id: uid(),
+        name: preset.name || "",
+        sales: preset.sales || "",
+        halfShifts: preset.halfShifts || ""
+      });
+      render();
+      const last = staffList.querySelector(".staff-card:last-child .name-input");
+      if (last) last.focus();
+    }
+
+    $("addStaff").addEventListener("click", () => addStaff());
+    $("prevMonth").addEventListener("click", () => { month = shiftMonth(month, -1); render(); });
+    $("nextMonth").addEventListener("click", () => { month = shiftMonth(month, 1); render(); });
+    $("importLast").addEventListener("click", () => {
+      const prev = db[shiftMonth(month, -1)] || [];
+      db[month] = prev.map((p) => ({ id: uid(), name: p.name, sales: "", halfShifts: "" }));
+      render();
+    });
+    $("rulesBtn").addEventListener("click", () => $("rulesDialog").showModal());
+    $("closeRules").addEventListener("click", () => $("rulesDialog").close());
+
+    $("exportBtn").addEventListener("click", () => {
+      const rows = [["月份","姓名","业绩","提成","半班数","加班费","底薪","全勤奖","餐补","社保","固定工资","应发合计"]];
+      staffOf().forEach((p) => {
+        const c = calc(p);
+        rows.push([month, p.name, c.sales, c.comm, c.halfShifts, c.ot, FIXED.base, FIXED.attendance, FIXED.meal, FIXED.social, c.fixed, c.total]);
+      });
+      const csv = rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `GC工资台账-${month}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    $("printBtn").addEventListener("click", () => {
+      const people = staffOf();
+      if (!people.length) { alert("先添加员工再打印。"); return; }
+      $("slips").innerHTML = people.map((p) => {
+        const c = calc(p);
+        return `
+          <section class="slip">
+            <div class="slip-head">
+              <div>
+                <div>GC 女装 / 格丝克洛丝</div>
+                <h2>工资条 · ${labelMonth(month)}</h2>
+              </div>
+              <div>${p.name || "未命名"}</div>
+            </div>
+            <table>
+              <tr><td>本月业绩</td><td>¥${money(c.sales)}</td></tr>
+              <tr><td>提成</td><td>¥${money(c.comm)}</td></tr>
+              <tr><td>半班数 / 加班费</td><td>${c.halfShifts} × 30 = ¥${money(c.ot)}</td></tr>
+              <tr><td>底薪</td><td>¥${money(FIXED.base)}</td></tr>
+              <tr><td>全勤奖</td><td>¥${money(FIXED.attendance)}</td></tr>
+              <tr><td>餐补</td><td>¥${money(FIXED.meal)}</td></tr>
+              <tr><td>社保</td><td>¥${money(FIXED.social)}</td></tr>
+              <tr><td>固定工资小计</td><td>¥${money(FIXED_TOTAL)}</td></tr>
+              <tr><td class="big">应发合计</td><td class="big">¥${money(c.total)}</td></tr>
+            </table>
+            <div class="sign"><span>员工确认：____________</span><span>日期：____________</span></div>
+          </section>`;
+      }).join("");
+      window.print();
+    });
+
+    // Self-check against the store rules
+    (function assertRules() {
+      const cases = [
+        [75000, 750],
+        [80000, 800],
+        [80001, 1600.03],
+        [90000, 1900]
+      ];
+      for (const [sales, expect] of cases) {
+        const got = commission(sales);
+        if (got !== expect) console.error("提成规则校验失败", sales, got, expect);
+      }
+    })();
+
+    render();
+  </script>
+</body>
+</html>
