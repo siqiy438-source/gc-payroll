@@ -812,7 +812,12 @@
       document.querySelectorAll(".staff-tab[data-id]").forEach((b) => {
         const on = b.dataset.id === selectedId;
         b.classList.toggle("on", on);
-        if (on) b.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        if (on) {
+          const strip = b.parentElement;
+          const l = b.offsetLeft, r = l + b.offsetWidth;
+          if (l < strip.scrollLeft) strip.scrollTo({ left: l - 8, behavior: "smooth" });
+          else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollTo({ left: r - strip.clientWidth + 8, behavior: "smooth" });
+        }
       });
       const cnt = $("staffCount");
       if (cnt) cnt.textContent = people.length > 1 ? `${idx + 1} / ${people.length}` : "";
@@ -833,7 +838,7 @@
       snapping = true;
       staffList.scrollTo({ left, behavior: smooth ? "smooth" : "instant" });
       clearTimeout(snapToSelected.t);
-      snapToSelected.t = setTimeout(() => { snapping = false; }, smooth ? 500 : 80);
+      snapToSelected.t = setTimeout(() => { snapping = false; }, smooth ? 700 : 120);
     }
     let scrollT = null;
     function pickVisible() {
@@ -1126,15 +1131,17 @@
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `GC工资条-${month}-${safeFileName(staffLabel(person))}.docx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(a.href);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
     function printSelected(person) {
       const c = calc(person);
       const items = slipRows(c);
       const rows = items.map(([k, v], i) => {
         const cls = i === items.length - 1 ? ' class="big"' : "";
-        return `<tr><td${cls}>${k}</td><td${cls}>${v}</td></tr>`;
+        return `<tr><td${cls}>${escapeAttr(k)}</td><td${cls}>${escapeAttr(v)}</td></tr>`;
       }).join("");
       $("slips").innerHTML = `
         <section class="slip">
@@ -1143,7 +1150,7 @@
               <div>GC 女装 / 格丝克洛丝</div>
               <h2>工资条 · ${labelMonth(month)}</h2>
             </div>
-            <div>${staffLabel(person)}</div>
+            <div>${escapeAttr(staffLabel(person))}</div>
           </div>
           <table>${rows}</table>
           <div class="sign"><span>员工确认：____________</span><span>日期：____________</span></div>
@@ -1228,8 +1235,11 @@
       g.fillText("PAYROLL SLIP", PAD, 124);
       // 姓名右侧
       const name = staffLabel(person);
-      g.font = font(700, 30); g.textAlign = "right"; g.fillStyle = "#ffffff";
-      g.fillText(name, W - PAD, 94);
+      g.textAlign = "right"; g.fillStyle = "#ffffff";
+      let nameSize = 30;
+      g.font = font(700, nameSize);
+      while (nameSize > 16 && g.measureText(name).width > 240) { nameSize -= 2; g.font = font(700, nameSize); }
+      g.fillText(fitText(g, name, 240), W - PAD, 94);
       g.font = font(500, 13); g.fillStyle = "rgba(255,255,255,0.7)";
       g.fillText("员工", W - PAD, 124);
       g.textAlign = "left";
@@ -1239,10 +1249,12 @@
         const cy = y + i * rowH;
         if (i % 2 === 1) { g.fillStyle = "#f5f7fb"; g.fillRect(PAD - 12, cy, W - PAD * 2 + 24, rowH); }
         g.fillStyle = "#e5e9f2"; g.fillRect(PAD, cy + rowH - 1, W - PAD * 2, 1);
-        g.fillStyle = "#4a5670"; g.font = font(500, 18);
-        g.fillText(k, PAD + 4, cy + 33);
         g.fillStyle = "#0f1a30"; g.font = font(600, 19); g.textAlign = "right";
         g.fillText(v, W - PAD - 4, cy + 33);
+        const vw = g.measureText(v).width;
+        g.textAlign = "left";
+        g.fillStyle = "#4a5670"; g.font = font(500, 18);
+        g.fillText(fitText(g, k, W - PAD * 2 - vw - 28), PAD + 4, cy + 33);
         g.textAlign = "left";
       });
       y += bodyRows * rowH;
@@ -1269,6 +1281,12 @@
       g.fillStyle = "#8a94aa"; g.font = font(500, 12);
       g.fillText("固定工资 4,000 = 底薪 2,000 + 全勤 400 + 餐补 400 + 社保 1,200；提成 ≤8 万按 1%，超出 8 万按 2%/3%", PAD, y + 30);
       return cv;
+    }
+    function fitText(g, text, maxW) {
+      let t = String(text);
+      if (g.measureText(t).width <= maxW) return t;
+      while (t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+      return t + "…";
     }
     function roundRect(g, x, y, w, h, r) {
       g.beginPath();
