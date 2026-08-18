@@ -440,11 +440,11 @@
       overflow: hidden;
       background: #fff;
       box-shadow: 0 8px 28px -10px rgba(15, 26, 48, 0.35);
+      display: flex;
+      justify-content: center;
       max-height: 64vh;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
     }
-    #imgDialog img { display: block; width: 100%; height: auto; -webkit-touch-callout: default; }
+    #imgDialog img { display: block; width: auto; height: auto; max-width: 100%; max-height: 64vh; -webkit-touch-callout: default; }
     #imgDialog .img-tip { margin-top: 12px; font-size: 13px; color: var(--ink-soft); text-align: center; }
     #imgDialog menu { justify-content: center; margin-top: 12px; }
 
@@ -1207,79 +1207,177 @@
       a.remove();
     });
 
+    /* 月白版式：浅米白纸面、发丝线、无卡片无边框 */
+    const SLIP_SANS  = '-apple-system, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+    const SLIP_SERIF = 'Georgia, "Songti SC", "STSong", "Noto Serif SC", "SimSun", serif';
+    const SLIP = {
+      bg: "#FCFAF7", bg2: "#F7F4EF", ink: "#211F1B", label: "#6F6862",
+      rule: "rgba(33,31,27,.13)", faint: "rgba(33,31,27,.30)",
+      accent: "#8A7350"
+    };
+    const EN_MONTHS = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE",
+                       "JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
+    function labelMonthEn(key) {
+      const [y, m] = key.split("-");
+      return `${EN_MONTHS[Number(m) - 1] || ""} ${y}`.trim();
+    }
+
+    // 图片版按业绩／固定／补贴分三组，比一长条平铺好读；打印和 Word 仍走 slipRows
+    function slipGroups(c) {
+      const groups = [
+        { label: "业绩与提成", rows: [
+          ["本月业绩", `¥${money(c.sales)}`],
+          ["提成", `¥${money(c.comm)}`],
+          [c.halfShifts > 0 ? `加班 ${money(c.halfShifts)} 个半班` : "加班", `¥${money(c.ot)}`]
+        ] },
+        { label: "固定工资", note: `¥${money(FIXED_TOTAL)}`, rows: [
+          ["底薪", `¥${money(FIXED.base)}`],
+          ["全勤奖", `¥${money(FIXED.attendance)}`],
+          ["餐补", `¥${money(FIXED.meal)}`],
+          ["社保", `¥${money(FIXED.social)}`]
+        ] }
+      ];
+      if (c.extras.length) {
+        groups.push({
+          label: "额外补贴",
+          rows: c.extras.map((s) => [s.label, `¥${money(s.amount)}`])
+        });
+      }
+      return groups;
+    }
+
+    // 中文小标题拉开字距，是这版质感的主要来源；canvas 没有原生 tracking，只能逐字画
+    function spacedText(g, text, x, y, sp) {
+      const prev = g.textAlign;
+      g.textAlign = "left";
+      let cx = x;
+      for (const ch of String(text)) { g.fillText(ch, cx, y); cx += g.measureText(ch).width + sp; }
+      g.textAlign = prev;
+      return cx - x - sp;
+    }
+    function spacedWidth(g, text, sp) {
+      const a = [...String(text)];
+      return a.reduce((w, ch) => w + g.measureText(ch).width, 0) + sp * (a.length - 1);
+    }
+    function spacedCenter(g, text, cx, y, sp) {
+      return spacedText(g, text, cx - spacedWidth(g, text, sp) / 2, y, sp);
+    }
+    function spacedRight(g, text, rx, y, sp) {
+      return spacedText(g, text, rx - spacedWidth(g, text, sp), y, sp);
+    }
+    // 短线 · 菱形 · 短线
+    function ornament(g, cx, y, color) {
+      g.fillStyle = color;
+      g.fillRect(cx - 44, y, 30, 1);
+      g.fillRect(cx + 14, y, 30, 1);
+      g.save(); g.translate(cx, y + 0.5); g.rotate(Math.PI / 4);
+      g.fillRect(-3.2, -3.2, 6.4, 6.4); g.restore();
+    }
+    // 大金额：¥ 缩小抬高，数字放大、字距轻微收紧
+    function bigMoney(g, text, rightX, baseY, size, color) {
+      const m = String(text).match(/^(\D*)(.*)$/);
+      const sym = m[1], num = m[2];
+      const symSize = size * 0.44, gapX = size * 0.11, tr = -size * 0.022;
+      g.textAlign = "left"; g.fillStyle = color;
+      g.font = `500 ${size}px ${SLIP_SANS}`;    const nw = spacedWidth(g, num, tr);
+      g.font = `400 ${symSize}px ${SLIP_SANS}`; const sw = g.measureText(sym).width;
+      const x = rightX - (nw + sw + gapX);
+      g.fillText(sym, x, baseY - size * 0.46);
+      g.font = `500 ${size}px ${SLIP_SANS}`;    spacedText(g, num, x + sw + gapX, baseY, tr);
+    }
+    // 行高自适应：人少就撑开留白，补贴多就自动收窄，始终锁死 9:16
+    function slipRowLayout(groups, cfg) {
+      const nRows = groups.reduce((a, s) => a + s.rows.length, 0);
+      const nSec = groups.length;
+      const gaps = nSec + 1;
+      const avail = cfg.bodyEnd - cfg.bodyStart - cfg.totalH - gaps * cfg.gap - nSec * cfg.secH;
+      const rowH = Math.max(cfg.rowMin, Math.min(cfg.rowCap, avail / nRows));
+      const slack = Math.max(0, avail - nRows * rowH);
+      return { rowH, gap: cfg.gap + slack / gaps };
+    }
+
     function drawSlip(person, c) {
-      const W = 750, PAD = 44, S = 2;
-      const rows = slipRows(c);
-      const font = (w, px) => `${w} ${px}px -apple-system, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", "Noto Sans SC", "Microsoft YaHei", sans-serif`;
-      const headH = 150, rowH = 52, totalH = 96, signH = 110, footH = 56;
-      const bodyRows = rows.length - 1;
-      const H = headH + 28 + bodyRows * rowH + totalH + signH + footH;
+      // 9:16 竖版，输出 1080 × 1920
+      const W = 750, H = Math.round(W * 16 / 9), S = 1.44, PAD = 58;
+      const t = SLIP;
+      const f = (w, s) => `${w} ${s}px ${SLIP_SANS}`;
+      const sf = (s) => `400 ${s}px ${SLIP_SERIF}`;
+      const groups = slipGroups(c);
+
       const cv = document.createElement("canvas");
-      cv.width = W * S; cv.height = H * S;
+      cv.width = Math.round(W * S); cv.height = Math.round(H * S);
       const g = cv.getContext("2d");
       g.scale(S, S);
-      // 纸面
-      g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
-      // 顶部藏青头
-      const grad = g.createLinearGradient(0, 0, W, headH);
-      grad.addColorStop(0, "#2a3d70"); grad.addColorStop(0.55, "#1e2f5a"); grad.addColorStop(1, "#15213f");
-      g.fillStyle = grad; g.fillRect(0, 0, W, headH);
-      g.fillStyle = "rgba(255,255,255,0.10)";
-      g.beginPath(); g.arc(W - 40, -30, 170, 0, Math.PI * 2); g.fill();
-      g.fillStyle = "rgba(255,255,255,0.7)"; g.font = font(600, 14);
       g.textBaseline = "alphabetic";
-      g.fillText("GC 女装 · 格丝克洛丝", PAD, 48);
-      g.fillStyle = "#ffffff"; g.font = font(700, 34);
-      g.fillText(`工资条 · ${labelMonth(month)}`, PAD, 94);
-      g.font = font(500, 16); g.fillStyle = "rgba(255,255,255,0.78)";
-      g.fillText("PAYROLL SLIP", PAD, 124);
-      // 姓名右侧
+
+      const paper = g.createLinearGradient(0, 0, 0, H);
+      paper.addColorStop(0, t.bg); paper.addColorStop(1, t.bg2);
+      g.fillStyle = paper; g.fillRect(0, 0, W, H);
+      g.fillStyle = t.accent; g.fillRect(0, 0, W, 3);   // 顶部书头带，代替边框
+
+      /* 报头 */
+      g.fillStyle = t.label; g.font = f(500, 13);
+      spacedCenter(g, "格丝克洛丝", W / 2, 110, 10);
+      ornament(g, W / 2, 140, t.accent);
+      g.fillStyle = t.ink; g.font = sf(60);
+      spacedCenter(g, "工资条", W / 2, 216, 8);
+      g.fillStyle = t.label; g.font = f(600, 11.5);
+      spacedCenter(g, labelMonthEn(month), W / 2, 252, 5);
+
+      /* 员工 */
+      g.fillStyle = t.rule; g.fillRect(PAD, 300, W - PAD * 2, 1);
+      g.fillStyle = t.label; g.font = f(600, 12);
+      spacedText(g, "员工", PAD, 344, 3.5);
       const name = staffLabel(person);
-      g.textAlign = "right"; g.fillStyle = "#ffffff";
-      let nameSize = 30;
-      g.font = font(700, nameSize);
-      while (nameSize > 16 && g.measureText(name).width > 240) { nameSize -= 2; g.font = font(700, nameSize); }
-      g.fillText(fitText(g, name, 240), W - PAD, 94);
-      g.font = font(500, 13); g.fillStyle = "rgba(255,255,255,0.7)";
-      g.fillText("员工", W - PAD, 124);
+      g.textAlign = "right"; g.fillStyle = t.ink;
+      let ns = 30; g.font = sf(ns);
+      while (ns > 16 && g.measureText(name).width > 250) { ns -= 2; g.font = sf(ns); }
+      g.fillText(fitText(g, name, 250), W - PAD, 346);
       g.textAlign = "left";
-      // 明细行
-      let y = headH + 28;
-      rows.slice(0, -1).forEach(([k, v], i) => {
-        const cy = y + i * rowH;
-        if (i % 2 === 1) { g.fillStyle = "#f5f7fb"; g.fillRect(PAD - 12, cy, W - PAD * 2 + 24, rowH); }
-        g.fillStyle = "#e5e9f2"; g.fillRect(PAD, cy + rowH - 1, W - PAD * 2, 1);
-        g.fillStyle = "#0f1a30"; g.font = font(600, 19); g.textAlign = "right";
-        g.fillText(v, W - PAD - 4, cy + 33);
-        const vw = g.measureText(v).width;
-        g.textAlign = "left";
-        g.fillStyle = "#4a5670"; g.font = font(500, 18);
-        g.fillText(fitText(g, k, W - PAD * 2 - vw - 28), PAD + 4, cy + 33);
-        g.textAlign = "left";
+      g.fillStyle = t.rule; g.fillRect(PAD, 370, W - PAD * 2, 1);
+
+      /* 明细 */
+      const cfg = { bodyStart: 392, bodyEnd: H - 78, totalH: 150, gap: 26, secH: 34, rowCap: 62, rowMin: 34 };
+      const { rowH, gap } = slipRowLayout(groups, cfg);
+      let y = cfg.bodyStart + gap;
+
+      groups.forEach((sec) => {
+        g.fillStyle = t.accent; g.font = f(600, 11.5);
+        const lw = spacedText(g, sec.label, PAD, y + 12, 3.6);
+        let ruleR = W - PAD;
+        if (sec.note) {
+          g.fillStyle = t.label; g.font = f(600, 12);
+          const nw = spacedWidth(g, sec.note, 1.5);
+          spacedRight(g, sec.note, W - PAD, y + 12, 1.5);
+          ruleR = W - PAD - nw - 16;
+        }
+        const ruleL = PAD + lw + 16;
+        if (ruleR > ruleL) { g.fillStyle = t.rule; g.fillRect(ruleL, y + 8, ruleR - ruleL, 1); }
+
+        const cy = y + cfg.secH;
+        sec.rows.forEach(([k, v], i) => {
+          const ry = cy + i * rowH, ty = ry + rowH / 2 + 7;
+          g.textAlign = "right"; g.fillStyle = t.ink; g.font = f(500, 20);
+          g.fillText(v, W - PAD, ty);
+          const vw = g.measureText(v).width;
+          g.textAlign = "left"; g.fillStyle = t.label; g.font = f(500, 16.5);
+          g.fillText(fitText(g, k, W - PAD * 2 - vw - 30), PAD, ty);
+          if (i < sec.rows.length - 1) { g.fillStyle = t.rule; g.fillRect(PAD, ry + rowH - 1, W - PAD * 2, 1); }
+        });
+        y = cy + sec.rows.length * rowH + gap;
       });
-      y += bodyRows * rowH;
-      // 应发合计
-      const [tk, tv] = rows[rows.length - 1];
-      g.fillStyle = "#eef1f7";
-      roundRect(g, PAD - 12, y + 14, W - PAD * 2 + 24, totalH - 22, 16); g.fill();
-      g.fillStyle = "#4a5670"; g.font = font(600, 16);
-      g.fillText(tk, PAD + 8, y + 14 + 30);
-      g.fillStyle = "#1e2f5a"; g.font = font(800, 40); g.textAlign = "right";
-      g.fillText(tv, W - PAD - 8, y + 14 + 58);
-      g.textAlign = "left";
-      y += totalH;
-      // 签字
-      g.fillStyle = "#4a5670"; g.font = font(500, 15);
-      g.fillText("员工确认：", PAD, y + 62);
-      g.fillStyle = "#c8cfdc"; g.fillRect(PAD + 80, y + 66, 200, 1);
-      g.fillStyle = "#4a5670";
-      g.fillText("日期：", W / 2 + 40, y + 62);
-      g.fillStyle = "#c8cfdc"; g.fillRect(W / 2 + 90, y + 66, 180, 1);
-      y += signH;
-      // 页脚
-      g.fillStyle = "#e5e9f2"; g.fillRect(PAD, y, W - PAD * 2, 1);
-      g.fillStyle = "#8a94aa"; g.font = font(500, 12);
-      g.fillText("固定工资 4,000 = 底薪 2,000 + 全勤 400 + 餐补 400 + 社保 1,200；提成 ≤8 万按 1%，超出 8 万按 2%/3%", PAD, y + 30);
+
+      /* 应发合计 */
+      g.fillStyle = t.ink; g.fillRect(PAD, y, W - PAD * 2, 1);
+      g.fillStyle = t.label; g.font = f(600, 12);
+      spacedText(g, "应发合计", PAD, y + 44, 4);
+      g.fillStyle = t.accent; g.font = f(600, 10);
+      spacedText(g, "NET PAYABLE", PAD, y + 66, 3);
+      bigMoney(g, `¥${money(c.total)}`, W - PAD, y + 116, 64, t.ink);
+
+      /* 落款 */
+      g.fillStyle = t.faint; g.font = f(500, 10);
+      spacedCenter(g, "GC · 格丝克洛丝", W / 2, H - 46, 4.5);
       return cv;
     }
     function fitText(g, text, maxW) {
@@ -1287,15 +1385,6 @@
       if (g.measureText(t).width <= maxW) return t;
       while (t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1);
       return t + "…";
-    }
-    function roundRect(g, x, y, w, h, r) {
-      g.beginPath();
-      g.moveTo(x + r, y);
-      g.arcTo(x + w, y, x + w, y + h, r);
-      g.arcTo(x + w, y + h, x, y + h, r);
-      g.arcTo(x, y + h, x, y, r);
-      g.arcTo(x, y, x + w, y, r);
-      g.closePath();
     }
 
     function xmlEscape(s) {
